@@ -66,7 +66,7 @@
             </div>
             <div class="mb-3">
               <label class="form-label">Monto ($)</label>
-              <input type="number" class="form-length form-control" id="montoIngreso" placeholder="Ej: 1500000" required>
+              <input type="number" class="form-control" id="montoIngreso" placeholder="Ej: 1500000" required>
             </div>
             <div class="mb-3">
               <label class="form-label">Fecha</label>
@@ -167,11 +167,8 @@
 </div>
 
 <script>
-  // CONFIGURACIÓN AZURE COSMOS DB REST API / ENDPOINT
-  const COSMOS_ENDPOINT = "https://TU-CUENTA.documents.azure.com:443/";
-  const COSMOS_KEY = "TU_PRIMARY_KEY_O_TOKEN";
-  const DATABASE_ID = "ControlFinanzasDB";
-  const CONTAINER_ID = "movimientos";
+  // URL de tu Azure Function (Remplaza con tu URL real obtenida en el Azure Portal)
+  const FUNCTION_URL = "controlfinanzaspersonales-dxd4enh8cyd8bbft.westus3-01.azurewebsites.net/api/movimientos";
 
   // Inicializar fecha de hoy por defecto en los inputs
   const hoy = new Date().toISOString().split('T')[0];
@@ -203,7 +200,7 @@
     await guardarEnCosmosDB(doc);
     document.getElementById('formIngreso').reset();
     document.getElementById('fechaIngreso').value = hoy;
-    cargarDatos();
+    await cargarDatos();
   });
 
   // REGISTRAR EGRESO
@@ -221,41 +218,47 @@
     await guardarEnCosmosDB(doc);
     document.getElementById('formEgreso').reset();
     document.getElementById('fechaEgreso').value = hoy;
-    cargarDatos();
+    await cargarDatos();
   });
 
-  // SIMULACIÓN DE CAPA DE CONEXIÓN A COSMOS DB (O MOCK LOCAL SI SE PRUEBA SIN CREDENCIALES)
+  // GUARDAR EN COSMOS DB A TRAVÉS DE AZURE FUNCTION (POST)
   async function guardarEnCosmosDB(documento) {
-    // Si estás usando localStorage temporalmente hasta configurar Azure:
-    let localData = JSON.parse(localStorage.getItem('finanzas_data') || '[]');
-    localData.push(documento);
-    localStorage.setItem('finanzas_data', JSON.stringify(localData));
+    try {
+      const respuesta = await fetch(FUNCTION_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(documento)
+      });
 
-    /* 
-    Petición REST real a Azure Cosmos DB:
-    await fetch(`${COSMOS_ENDPOINT}dbs/${DATABASE_ID}/colls/${CONTAINER_ID}/docs`, {
-      method: 'POST',
-      headers: {
-        'x-ms-date': new Date().toUTCString(),
-        'x-ms-version': '2018-12-31',
-        'Authorization': COSMOS_KEY,
-        'Content-Type': 'application/json',
-        'x-ms-documentdb-partitionkey': `["${documento.mesAnio}"]`
-      },
-      body: JSON.stringify(documento)
-    });
-    */
+      if (!respuesta.ok) {
+        throw new Error(`Error en el servidor: ${respuesta.statusText}`);
+      }
+    } catch (error) {
+      console.error("Error al guardar en Azure:", error);
+      alert("Hubo un problema al guardar el registro en la base de datos.");
+    }
   }
 
+  // LEER DATOS DESDE COSMOS DB A TRAVÉS DE AZURE FUNCTION (GET)
   async function cargarDatos() {
-    // Carga desde localStorage (reemplazar por GET a Cosmos DB)
-    listadoMovimientos = JSON.parse(localStorage.getItem('finanzas_data') || '[]');
-    
-    // Ordenar por fecha descendente
-    listadoMovimientos.sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
+    try {
+      const respuesta = await fetch(FUNCTION_URL);
+      if (!respuesta.ok) {
+        throw new Error("Error al consultar movimientos");
+      }
 
-    actualizarKPIsYTabla();
-    renderizarGraficos();
+      listadoMovimientos = await respuesta.json();
+
+      // Ordenar por fecha descendente
+      listadoMovimientos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+      actualizarKPIsYTabla();
+      renderizarGraficos();
+    } catch (error) {
+      console.error("Error cargando los datos desde Azure:", error);
+    }
   }
 
   function actualizarKPIsYTabla() {
@@ -346,4 +349,4 @@
   }
 </script>
 </body>
-</html> 
+</html>
