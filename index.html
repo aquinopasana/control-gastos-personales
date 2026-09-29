@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Control de Gastos Personales y Caja</title>
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Chart.js para Reportes -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .card-kpi { border-left: 4px solid; }
+    .kpi-ingresos { border-left-color: #198754; }
+    .kpi-egresos { border-left-color: #dc3545; }
+    .kpi-caja { border-left-color: #0d6efd; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark bg-primary mb-4">
+  <div class="container-fluid">
+    <span class="navbar-brand mb-0 h1">📊 Control Finanzas & Caja Personal</span>
+  </div>
+</nav>
+
+<div class="container">
+
+  <!-- KPI / RESUMEN DE CAJA -->
+  <div class="row mb-4">
+    <div class="col-md-4 mb-2">
+      <div class="card card-kpi kpi-ingresos shadow-sm p-3 bg-white rounded">
+        <small class="text-muted fw-bold">TOTAL INGRESOS (MES)</small>
+        <h3 class="text-success my-1" id="kpiIngresos">$0</h3>
+      </div>
+    </div>
+    <div class="col-md-4 mb-2">
+      <div class="card card-kpi kpi-egresos shadow-sm p-3 bg-white rounded">
+        <small class="text-muted fw-bold">TOTAL EGRESOS (MES)</small>
+        <h3 class="text-danger my-1" id="kpiEgresos">$0</h3>
+      </div>
+    </div>
+    <div class="col-md-4 mb-2">
+      <div class="card card-kpi kpi-caja shadow-sm p-3 bg-white rounded">
+        <small class="text-muted fw-bold">DISPONIBLE EN CAJA</small>
+        <h3 class="text-primary my-1" id="kpiCaja">$0</h3>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- FORMULARIO REGISTRO INGRESOS -->
+    <div class="col-md-6 mb-4">
+      <div class="card shadow-sm">
+        <div class="card-header bg-success text-white fw-bold">💵 Registrar Ingreso</div>
+        <div class="card-body">
+          <form id="formIngreso">
+            <div class="mb-3">
+              <label class="form-label">Origen de Ingreso</label>
+              <select class="form-select" id="origenIngreso" required>
+                <option value="" disabled selected>Seleccione origen...</option>
+                <option value="Sueldo">Sueldo</option>
+                <option value="Venta de quesos">Venta de quesos</option>
+                <option value="Ventas varias">Ventas varias</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Monto ($)</label>
+              <input type="number" class="form-control" id="montoIngreso" placeholder="Ej: 1500000" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Fecha</label>
+              <input type="date" class="form-control" id="fechaIngreso" required>
+            </div>
+            <button type="submit" class="btn btn-success w-100">Guardar Ingreso</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- FORMULARIO REGISTRO EGRESOS -->
+    <div class="col-md-6 mb-4">
+      <div class="card shadow-sm">
+        <div class="card-header bg-danger text-white fw-bold">💸 Registrar Gasto / Egreso</div>
+        <div class="card-body">
+          <form id="formEgreso">
+            <div class="mb-3">
+              <label class="form-label">Categoría de Gasto</label>
+              <select class="form-select" id="categoriaEgreso" required>
+                <option value="" disabled selected>Seleccione ítem...</option>
+                <option value="Credito hipotecario">Credito hipotecario</option>
+                <option value="Arriendo Stgo">Arriendo Stgo</option>
+                <option value="Arriendo Afta">Arriendo Afta</option>
+                <option value="Arriendo Caren">Arriendo Caren</option>
+                <option value="internet Afta">internet Afta</option>
+                <option value="internet Carén">internet Carén</option>
+                <option value="pasajes bus">pasajes bus</option>
+                <option value="bencina">bencina</option>
+                <option value="alimentacion cata">alimentacion cata</option>
+                <option value="alimentacion max">alimentacion max</option>
+                <option value="alimentacion ica">alimentacion ica</option>
+                <option value="celular">celular</option>
+                <option value="contribuciones">contribuciones</option>
+                <option value="universidad Cata">universidad Cata</option>
+                <option value="traslados cata">traslados cata</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Monto Pagado ($)</label>
+              <input type="number" class="form-control" id="montoEgreso" placeholder="Ej: 450000" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Fecha</label>
+              <input type="date" class="form-control" id="fechaEgreso" required>
+            </div>
+            <button type="submit" class="btn btn-danger w-100">Guardar Egreso</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECCIÓN REPORTES Y GRÁFICOS -->
+  <div class="row mb-5">
+    <div class="col-md-8 mb-4">
+      <div class="card shadow-sm">
+        <div class="card-header bg-white fw-bold">📈 Gastos Acumulados por Categoría (Mes Actual)</div>
+        <div class="card-body">
+          <canvas id="chartGastosCat" height="200"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 mb-4">
+      <div class="card shadow-sm">
+        <div class="card-header bg-white fw-bold">⚖️ Balance Ingresos vs Egresos</div>
+        <div class="card-body">
+          <canvas id="chartBalance" height="200"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABLA HISTORIAL DE MOVIMIENTOS -->
+  <div class="row mb-5">
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-header bg-white fw-bold">📋 Historial de Pagos y Movimientos</div>
+        <div class="card-body table-responsive">
+          <table class="table table-hover align-middle">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Tipo</th>
+                <th>Detalle / Categoría</th>
+                <th>Monto</th>
+              </tr>
+            </thead>
+            <tbody id="tablaHistorial">
+              <!-- Carga dinámica -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // URL de tu Azure Function (Remplaza con tu URL real obtenida en el Azure Portal)
+  const FUNCTION_URL = "https://TU-FUNCTION-APP.azurewebsites.net/api/movimientos";
+
+  // Inicializar fecha de hoy por defecto en los inputs
+  const hoy = new Date().toISOString().split('T')[0];
+  document.getElementById('fechaIngreso').value = hoy;
+  document.getElementById('fechaEgreso').value = hoy;
+
+  // Variables globales de gráficos
+  let chartCatInstance = null;
+  let chartBalanceInstance = null;
+  let listadoMovimientos = [];
+
+  // AL CARGAR LA PÁGINA
+  window.addEventListener('DOMContentLoaded', () => {
+    cargarDatos();
+  });
+
+  // REGISTRAR INGRESO
+  document.getElementById('formIngreso').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fecha = document.getElementById('fechaIngreso').value;
+    const doc = {
+      id: "ing-" + Date.now(),
+      tipo: "ingreso",
+      origen: document.getElementById('origenIngreso').value,
+      monto: parseFloat(document.getElementById('montoIngreso').value),
+      fecha: fecha,
+      mesAnio: fecha.substring(0, 7)
+    };
+    await guardarEnCosmosDB(doc);
+    document.getElementById('formIngreso').reset();
+    document.getElementById('fechaIngreso').value = hoy;
+    await cargarDatos();
+  });
+
+  // REGISTRAR EGRESO
+  document.getElementById('formEgreso').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fecha = document.getElementById('fechaEgreso').value;
+    const doc = {
+      id: "egr-" + Date.now(),
+      tipo: "egreso",
+      categoria: document.getElementById('categoriaEgreso').value,
+      monto: parseFloat(document.getElementById('montoEgreso').value),
+      fecha: fecha,
+      mesAnio: fecha.substring(0, 7)
+    };
+    await guardarEnCosmosDB(doc);
+    document.getElementById('formEgreso').reset();
+    document.getElementById('fechaEgreso').value = hoy;
+    await cargarDatos();
+  });
+
+  // GUARDAR EN COSMOS DB A TRAVÉS DE AZURE FUNCTION (POST)
+  async function guardarEnCosmosDB(documento) {
+    try {
+      const respuesta = await fetch(FUNCTION_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(documento)
+      });
+
+      if (!respuesta.ok) {
+        throw new Error(`Error en el servidor: ${respuesta.statusText}`);
+      }
+    } catch (error) {
+      console.error("Error al guardar en Azure:", error);
+      alert("Hubo un problema al guardar el registro en la base de datos.");
+    }
+  }
+
+  // LEER DATOS DESDE COSMOS DB A TRAVÉS DE AZURE FUNCTION (GET)
+  async function cargarDatos() {
+    try {
+      const respuesta = await fetch(FUNCTION_URL);
+      if (!respuesta.ok) {
+        throw new Error("Error al consultar movimientos");
+      }
+
+      listadoMovimientos = await respuesta.json();
+
+      // Ordenar por fecha descendente
+      listadoMovimientos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+      actualizarKPIsYTabla();
+      renderizarGraficos();
+    } catch (error) {
+      console.error("Error cargando los datos desde Azure:", error);
+    }
+  }
+
+  function actualizarKPIsYTabla() {
+    const mesActual = hoy.substring(0, 7);
+    let totalIngresos = 0;
+    let totalEgresos = 0;
+    let totalCajaHistorico = 0;
+
+    const tbody = document.getElementById('tablaHistorial');
+    tbody.innerHTML = '';
+
+    listadoMovimientos.forEach(m => {
+      // Cálculo global para Caja
+      if (m.tipo === 'ingreso') totalCajaHistorico += m.monto;
+      if (m.tipo === 'egreso') totalCajaHistorico -= m.monto;
+
+      // Cálculos del mes actual
+      if (m.mesAnio === mesActual) {
+        if (m.tipo === 'ingreso') totalIngresos += m.monto;
+        if (m.tipo === 'egreso') totalEgresos += m.monto;
+      }
+
+      // Llenar tabla
+      const tr = document.createElement('tr');
+      const badgeClass = m.tipo === 'ingreso' ? 'bg-success' : 'bg-danger';
+      const detalle = m.tipo === 'ingreso' ? m.origen : m.categoria;
+      const signo = m.tipo === 'ingreso' ? '+' : '-';
+
+      tr.innerHTML = `
+        <td>${m.fecha}</td>
+        <td><span class="badge ${badgeClass}">${m.tipo.toUpperCase()}</span></td>
+        <td class="fw-bold">${detalle}</td>
+        <td class="${m.tipo === 'ingreso' ? 'text-success' : 'text-danger'} fw-bold">${signo} $${m.monto.toLocaleString('es-CL')}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('kpiIngresos').innerText = `$${totalIngresos.toLocaleString('es-CL')}`;
+    document.getElementById('kpiEgresos').innerText = `$${totalEgresos.toLocaleString('es-CL')}`;
+    document.getElementById('kpiCaja').innerText = `$${totalCajaHistorico.toLocaleString('es-CL')}`;
+  }
+
+  function renderizarGraficos() {
+    const mesActual = hoy.substring(0, 7);
+    const egresosMes = listadoMovimientos.filter(m => m.tipo === 'egreso' && m.mesAnio === mesActual);
+
+    // Agrupar egresos por categoría
+    const categorias = {};
+    egresosMes.forEach(e => {
+      categorias[e.categoria] = (categorias[e.categoria] || 0) + e.monto;
+    });
+
+    // 1. Gráfico de Barras por Categoría
+    const ctxCat = document.getElementById('chartGastosCat').getContext('2d');
+    if (chartCatInstance) chartCatInstance.destroy();
+    
+    chartCatInstance = new Chart(ctxCat, {
+      type: 'bar',
+      data: {
+        labels: Object.keys(categorias),
+        datasets: [{
+          label: 'Monto Gastado ($)',
+          data: Object.values(categorias),
+          backgroundColor: '#dc3545'
+        }]
+      },
+      options: { responsive: true, plugins: { legend: { display: false } } }
+    });
+
+    // 2. Gráfico Donut Balance (Ingresos vs Egresos Mes)
+    const totalIng = listadoMovimientos.filter(m => m.tipo === 'ingreso' && m.mesAnio === mesActual).reduce((acc, curr) => acc + curr.monto, 0);
+    const totalEgr = listadoMovimientos.filter(m => m.tipo === 'egreso' && m.mesAnio === mesActual).reduce((acc, curr) => acc + curr.monto, 0);
+
+    const ctxBal = document.getElementById('chartBalance').getContext('2d');
+    if (chartBalanceInstance) chartBalanceInstance.destroy();
+
+    chartBalanceInstance = new Chart(ctxBal, {
+      type: 'doughnut',
+      data: {
+        labels: ['Ingresos', 'Egresos'],
+        datasets: [{
+          data: [totalIng, totalEgr],
+          backgroundColor: ['#198754', '#dc3545']
+        }]
+      },
+      options: { responsive: true }
+    });
+  }
+</script>
+</body>
+</html>
