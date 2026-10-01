@@ -26,23 +26,33 @@
 
 <div class="container">
 
+  <!-- SELECTOR DE MES PARA EL HISTORIAL Y REPORTES -->
+  <div class="row mb-3 align-items-center bg-white p-3 rounded shadow-sm mx-0">
+    <div class="col-md-6 mb-2 mb-md-0">
+      <h5 class="mb-0 text-secondary">🗓️ Filtrar Reportes por Mes:</h5>
+    </div>
+    <div class="col-md-6">
+      <input type="month" id="selectorMes" class="form-control form-control-lg fw-bold text-primary" onchange="actualizarKPIsYTabla(); renderizarGraficos();">
+    </div>
+  </div>
+
   <!-- KPI / RESUMEN DE CAJA -->
   <div class="row mb-4">
     <div class="col-md-4 mb-2">
       <div class="card card-kpi kpi-ingresos shadow-sm p-3 bg-white rounded">
-        <small class="text-muted fw-bold">TOTAL INGRESOS (MES)</small>
+        <small class="text-muted fw-bold">TOTAL INGRESOS (<span class="labelMesSeleccionado"></span>)</small>
         <h3 class="text-success my-1" id="kpiIngresos">$0</h3>
       </div>
     </div>
     <div class="col-md-4 mb-2">
       <div class="card card-kpi kpi-egresos shadow-sm p-3 bg-white rounded">
-        <small class="text-muted fw-bold">TOTAL EGRESOS (MES)</small>
+        <small class="text-muted fw-bold">TOTAL EGRESOS (<span class="labelMesSeleccionado"></span>)</small>
         <h3 class="text-danger my-1" id="kpiEgresos">$0</h3>
       </div>
     </div>
     <div class="col-md-4 mb-2">
       <div class="card card-kpi kpi-caja shadow-sm p-3 bg-white rounded">
-        <small class="text-muted fw-bold">DISPONIBLE EN CAJA</small>
+        <small class="text-muted fw-bold">DISPONIBLE EN CAJA (HISTÓRICO)</small>
         <h3 class="text-primary my-1" id="kpiCaja">$0</h3>
       </div>
     </div>
@@ -103,8 +113,6 @@
                 <option value="contribuciones">contribuciones</option>
                 <option value="universidad Cata">universidad Cata</option>
                 <option value="traslados cata">traslados cata</option>
-                <option value="cigarros">cigarros</option>
-                <option value="otros gastos">otros gastos</option>
               </select>
             </div>
             <div class="mb-3">
@@ -126,7 +134,7 @@
   <div class="row mb-5">
     <div class="col-md-8 mb-4">
       <div class="card shadow-sm">
-        <div class="card-header bg-white fw-bold">📈 Gastos Acumulados por Categoría (Mes Actual)</div>
+        <div class="card-header bg-white fw-bold">📈 Gastos Acumulados por Categoría (<span class="labelMesSeleccionado"></span>)</div>
         <div class="card-body">
           <canvas id="chartGastosCat" height="200"></canvas>
         </div>
@@ -146,7 +154,10 @@
   <div class="row mb-5">
     <div class="col-12">
       <div class="card shadow-sm">
-        <div class="card-header bg-white fw-bold">📋 Historial de Pagos y Movimientos</div>
+        <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+          <span>📋 Historial de Pagos y Movimientos</span>
+          <small class="text-muted">Mostrando mes: <b class="labelMesSeleccionado"></b></small>
+        </div>
         <div class="card-body table-responsive">
           <table class="table table-hover align-middle">
             <thead>
@@ -169,20 +180,28 @@
 </div>
 
 <script>
-  // URL de tu Azure Function (Remplaza con tu URL real obtenida en el Azure Portal)
+  // URL de tu Azure Function
   const FUNCTION_URL = "https://controlfinanzas-py-a3euezh6esg6gebj.westus3-01.azurewebsites.net/api/movimientos";
 
-  // Inicializar fecha de hoy por defecto en los inputs
-  const hoy = new Date().toISOString().split('T')[0];
-  document.getElementById('fechaIngreso').value = hoy;
-  document.getElementById('fechaEgreso').value = hoy;
+  // Calcular la fecha local (evitando problemas de zona horaria UTC)
+  const ahora = new Date();
+  const anioLocal = ahora.getFullYear();
+  const mesLocal = String(ahora.getMonth() + 1).padStart(2, '0');
+  const diaLocal = String(ahora.getDate()).padStart(2, '0');
 
-  // Variables globales de gráficos
+  const hoyLocal = `${anioLocal}-${mesLocal}-${diaLocal}`;
+  const mesActualLocal = `${anioLocal}-${mesLocal}`;
+
+  // Inicializar inputs
+  document.getElementById('fechaIngreso').value = hoyLocal;
+  document.getElementById('fechaEgreso').value = hoyLocal;
+  document.getElementById('selectorMes').value = mesActualLocal;
+
+  // Variables globales
   let chartCatInstance = null;
   let chartBalanceInstance = null;
   let listadoMovimientos = [];
 
-  // AL CARGAR LA PÁGINA
   window.addEventListener('DOMContentLoaded', () => {
     cargarDatos();
   });
@@ -201,7 +220,7 @@
     };
     await guardarEnCosmosDB(doc);
     document.getElementById('formIngreso').reset();
-    document.getElementById('fechaIngreso').value = hoy;
+    document.getElementById('fechaIngreso').value = hoyLocal;
     await cargarDatos();
   });
 
@@ -219,95 +238,89 @@
     };
     await guardarEnCosmosDB(doc);
     document.getElementById('formEgreso').reset();
-    document.getElementById('fechaEgreso').value = hoy;
+    document.getElementById('fechaEgreso').value = hoyLocal;
     await cargarDatos();
   });
 
-  // GUARDAR EN COSMOS DB A TRAVÉS DE AZURE FUNCTION (POST)
   async function guardarEnCosmosDB(documento) {
     try {
       const respuesta = await fetch(FUNCTION_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(documento)
       });
-
-      if (!respuesta.ok) {
-        throw new Error(`Error en el servidor: ${respuesta.statusText}`);
-      }
+      if (!respuesta.ok) throw new Error(`Error en servidor: ${respuesta.statusText}`);
     } catch (error) {
-      console.error("Error al guardar en Azure:", error);
+      console.error("Error al guardar:", error);
       alert("Hubo un problema al guardar el registro en la base de datos.");
     }
   }
 
-  // LEER DATOS DESDE COSMOS DB A TRAVÉS DE AZURE FUNCTION (GET)
   async function cargarDatos() {
     try {
       const respuesta = await fetch(FUNCTION_URL);
-      if (!respuesta.ok) {
-        throw new Error("Error al consultar movimientos");
-      }
+      if (!respuesta.ok) throw new Error("Error al consultar movimientos");
 
       listadoMovimientos = await respuesta.json();
-
-      // Ordenar por fecha descendente
       listadoMovimientos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
       actualizarKPIsYTabla();
       renderizarGraficos();
     } catch (error) {
-      console.error("Error cargando los datos desde Azure:", error);
+      console.error("Error cargando los datos:", error);
     }
   }
 
   function actualizarKPIsYTabla() {
-    const mesActual = hoy.substring(0, 7);
-    let totalIngresos = 0;
-    let totalEgresos = 0;
+    const mesSeleccionado = document.getElementById('selectorMes').value;
+
+    // Actualizar etiquetas en la interfaz
+    document.querySelectorAll('.labelMesSeleccionado').forEach(el => {
+      el.innerText = mesSeleccionado;
+    });
+
+    let totalIngresosMes = 0;
+    let totalEgresosMes = 0;
     let totalCajaHistorico = 0;
 
     const tbody = document.getElementById('tablaHistorial');
     tbody.innerHTML = '';
 
     listadoMovimientos.forEach(m => {
-      // Cálculo global para Caja
+      // 1. Cálculo del Total Acumulado en Caja (Histórico global de todos los tiempos)
       if (m.tipo === 'ingreso') totalCajaHistorico += m.monto;
       if (m.tipo === 'egreso') totalCajaHistorico -= m.monto;
 
-      // Cálculos del mes actual
-      if (m.mesAnio === mesActual) {
-        if (m.tipo === 'ingreso') totalIngresos += m.monto;
-        if (m.tipo === 'egreso') totalEgresos += m.monto;
+      // 2. Cálculo y Tabla filtrada por el Mes Seleccionado en el filtro superior
+      if (m.mesAnio === mesSeleccionado) {
+        if (m.tipo === 'ingreso') totalIngresosMes += m.monto;
+        if (m.tipo === 'egreso') totalEgresosMes += m.monto;
+
+        const tr = document.createElement('tr');
+        const badgeClass = m.tipo === 'ingreso' ? 'bg-success' : 'bg-danger';
+        const detalle = m.tipo === 'ingreso' ? m.origen : m.categoria;
+        const signo = m.tipo === 'ingreso' ? '+' : '-';
+
+        tr.innerHTML = `
+          <td>${m.fecha}</td>
+          <td><span class="badge ${badgeClass}">${m.tipo.toUpperCase()}</span></td>
+          <td class="fw-bold">${detalle}</td>
+          <td class="${m.tipo === 'ingreso' ? 'text-success' : 'text-danger'} fw-bold">${signo} $${m.monto.toLocaleString('es-CL')}</td>
+        `;
+        tbody.appendChild(tr);
       }
-
-      // Llenar tabla
-      const tr = document.createElement('tr');
-      const badgeClass = m.tipo === 'ingreso' ? 'bg-success' : 'bg-danger';
-      const detalle = m.tipo === 'ingreso' ? m.origen : m.categoria;
-      const signo = m.tipo === 'ingreso' ? '+' : '-';
-
-      tr.innerHTML = `
-        <td>${m.fecha}</td>
-        <td><span class="badge ${badgeClass}">${m.tipo.toUpperCase()}</span></td>
-        <td class="fw-bold">${detalle}</td>
-        <td class="${m.tipo === 'ingreso' ? 'text-success' : 'text-danger'} fw-bold">${signo} $${m.monto.toLocaleString('es-CL')}</td>
-      `;
-      tbody.appendChild(tr);
     });
 
-    document.getElementById('kpiIngresos').innerText = `$${totalIngresos.toLocaleString('es-CL')}`;
-    document.getElementById('kpiEgresos').innerText = `$${totalEgresos.toLocaleString('es-CL')}`;
+    document.getElementById('kpiIngresos').innerText = `$${totalIngresosMes.toLocaleString('es-CL')}`;
+    document.getElementById('kpiEgresos').innerText = `$${totalEgresosMes.toLocaleString('es-CL')}`;
     document.getElementById('kpiCaja').innerText = `$${totalCajaHistorico.toLocaleString('es-CL')}`;
   }
 
   function renderizarGraficos() {
-    const mesActual = hoy.substring(0, 7);
-    const egresosMes = listadoMovimientos.filter(m => m.tipo === 'egreso' && m.mesAnio === mesActual);
+    const mesSeleccionado = document.getElementById('selectorMes').value;
+    const egresosMes = listadoMovimientos.filter(m => m.tipo === 'egreso' && m.mesAnio === mesSeleccionado);
 
-    // Agrupar egresos por categoría
+    // Agrupar egresos por categoría para el mes seleccionado
     const categorias = {};
     egresosMes.forEach(e => {
       categorias[e.categoria] = (categorias[e.categoria] || 0) + e.monto;
@@ -316,7 +329,7 @@
     // 1. Gráfico de Barras por Categoría
     const ctxCat = document.getElementById('chartGastosCat').getContext('2d');
     if (chartCatInstance) chartCatInstance.destroy();
-    
+
     chartCatInstance = new Chart(ctxCat, {
       type: 'bar',
       data: {
@@ -330,9 +343,9 @@
       options: { responsive: true, plugins: { legend: { display: false } } }
     });
 
-    // 2. Gráfico Donut Balance (Ingresos vs Egresos Mes)
-    const totalIng = listadoMovimientos.filter(m => m.tipo === 'ingreso' && m.mesAnio === mesActual).reduce((acc, curr) => acc + curr.monto, 0);
-    const totalEgr = listadoMovimientos.filter(m => m.tipo === 'egreso' && m.mesAnio === mesActual).reduce((acc, curr) => acc + curr.monto, 0);
+    // 2. Gráfico Donut Balance (Ingresos vs Egresos del Mes Seleccionado)
+    const totalIng = listadoMovimientos.filter(m => m.tipo === 'ingreso' && m.mesAnio === mesSeleccionado).reduce((acc, curr) => acc + curr.monto, 0);
+    const totalEgr = listadoMovimientos.filter(m => m.tipo === 'egreso' && m.mesAnio === mesSeleccionado).reduce((acc, curr) => acc + curr.monto, 0);
 
     const ctxBal = document.getElementById('chartBalance').getContext('2d');
     if (chartBalanceInstance) chartBalanceInstance.destroy();
