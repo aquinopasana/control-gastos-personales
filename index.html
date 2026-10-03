@@ -26,13 +26,21 @@
 
 <div class="container">
 
-  <!-- SELECTOR DE MES PARA EL HISTORIAL Y REPORTES -->
+  <!-- SELECTOR DE MES Y AÑO PARA REPORTES -->
   <div class="row mb-3 align-items-center bg-white p-3 rounded shadow-sm mx-0">
-    <div class="col-md-6 mb-2 mb-md-0">
-      <h5 class="mb-0 text-secondary">🗓️ Filtrar Reportes por Mes:</h5>
+    <div class="col-md-4 mb-2 mb-md-0">
+      <h5 class="mb-0 text-secondary">🗓️ Filtrar Reportes:</h5>
     </div>
-    <div class="col-md-6">
-      <input type="month" id="selectorMes" class="form-control form-control-lg fw-bold text-primary" onchange="actualizarKPIsYTabla(); renderizarGraficos();">
+    <div class="col-md-4 mb-2 mb-md-0">
+      <label class="form-label small fw-bold mb-1">Mes en consulta</label>
+      <input type="month" id="selectorMes" class="form-control fw-bold text-primary" onchange="actualizarKPIsYTabla(); renderizarGraficos();">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label small fw-bold mb-1">Año para reporte acumulado</label>
+      <select id="selectorAnio" class="form-select fw-bold text-primary" onchange="renderizarGraficoAcumuladoAnual();">
+        <option value="2026" selected>2026</option>
+        <option value="2027">2027</option>
+      </select>
     </div>
   </div>
 
@@ -113,9 +121,6 @@
                 <option value="contribuciones">contribuciones</option>
                 <option value="universidad Cata">universidad Cata</option>
                 <option value="traslados cata">traslados cata</option>
-                <option value="cigarros">cigarros</option>
-                <option value="otros gastos">otros gastos</option>
-                <option value="Alimentación Afta">Alimentación Afta</option>
               </select>
             </div>
             <div class="mb-3">
@@ -133,11 +138,11 @@
     </div>
   </div>
 
-  <!-- SECCIÓN REPORTES Y GRÁFICOS -->
-  <div class="row mb-5">
+  <!-- SECCIÓN REPORTES MENSUALES -->
+  <div class="row mb-4">
     <div class="col-md-8 mb-4">
       <div class="card shadow-sm">
-        <div class="card-header bg-white fw-bold">📈 Gastos Acumulados por Categoría (<span class="labelMesSeleccionado"></span>)</div>
+        <div class="card-header bg-white fw-bold">📈 Gastos por Categoría (<span class="labelMesSeleccionado"></span>)</div>
         <div class="card-body">
           <canvas id="chartGastosCat" height="200"></canvas>
         </div>
@@ -145,9 +150,21 @@
     </div>
     <div class="col-md-4 mb-4">
       <div class="card shadow-sm">
-        <div class="card-header bg-white fw-bold">⚖️ Balance Ingresos vs Egresos</div>
+        <div class="card-header bg-white fw-bold">⚖️ Balance Mensual</div>
         <div class="card-body">
           <canvas id="chartBalance" height="200"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NUEVO: REPORTE ACUMULADO ANUAL POR CATEGORÍA Y MES (BARRA APILADA) -->
+  <div class="row mb-5">
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-header bg-white fw-bold">📊 Acumulado Anual por Categoría (Subdividido por Mes)</div>
+        <div class="card-body">
+          <canvas id="chartAcumuladoAnual" height="120"></canvas>
         </div>
       </div>
     </div>
@@ -186,7 +203,7 @@
   // URL de tu Azure Function
   const FUNCTION_URL = "https://controlfinanzas-py-a3euezh6esg6gebj.westus3-01.azurewebsites.net/api/movimientos";
 
-  // Calcular la fecha local (evitando problemas de zona horaria UTC)
+  // Calcular la fecha local
   const ahora = new Date();
   const anioLocal = ahora.getFullYear();
   const mesLocal = String(ahora.getMonth() + 1).padStart(2, '0');
@@ -199,11 +216,19 @@
   document.getElementById('fechaIngreso').value = hoyLocal;
   document.getElementById('fechaEgreso').value = hoyLocal;
   document.getElementById('selectorMes').value = mesActualLocal;
+  document.getElementById('selectorAnio').value = anioLocal;
 
-  // Variables globales
+  // Variables globales de gráficos
   let chartCatInstance = null;
   let chartBalanceInstance = null;
+  let chartAnualInstance = null;
   let listadoMovimientos = [];
+
+  const NOMBRES_MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+  const COLORES_MESES = [
+    '#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#858796',
+    '#5a5c69', '#6f42c1', '#f687b3', '#4299e1', '#38b2ac', '#ed8936'
+  ];
 
   window.addEventListener('DOMContentLoaded', () => {
     cargarDatos();
@@ -269,6 +294,7 @@
 
       actualizarKPIsYTabla();
       renderizarGraficos();
+      renderizarGraficoAcumuladoAnual();
     } catch (error) {
       console.error("Error cargando los datos:", error);
     }
@@ -277,7 +303,6 @@
   function actualizarKPIsYTabla() {
     const mesSeleccionado = document.getElementById('selectorMes').value;
 
-    // Actualizar etiquetas en la interfaz
     document.querySelectorAll('.labelMesSeleccionado').forEach(el => {
       el.innerText = mesSeleccionado;
     });
@@ -290,11 +315,9 @@
     tbody.innerHTML = '';
 
     listadoMovimientos.forEach(m => {
-      // 1. Cálculo del Total Acumulado en Caja (Histórico global de todos los tiempos)
       if (m.tipo === 'ingreso') totalCajaHistorico += m.monto;
       if (m.tipo === 'egreso') totalCajaHistorico -= m.monto;
 
-      // 2. Cálculo y Tabla filtrada por el Mes Seleccionado en el filtro superior
       if (m.mesAnio === mesSeleccionado) {
         if (m.tipo === 'ingreso') totalIngresosMes += m.monto;
         if (m.tipo === 'egreso') totalEgresosMes += m.monto;
@@ -323,13 +346,12 @@
     const mesSeleccionado = document.getElementById('selectorMes').value;
     const egresosMes = listadoMovimientos.filter(m => m.tipo === 'egreso' && m.mesAnio === mesSeleccionado);
 
-    // Agrupar egresos por categoría para el mes seleccionado
     const categorias = {};
     egresosMes.forEach(e => {
       categorias[e.categoria] = (categorias[e.categoria] || 0) + e.monto;
     });
 
-    // 1. Gráfico de Barras por Categoría
+    // 1. Gráfico Mensual por Categoría
     const ctxCat = document.getElementById('chartGastosCat').getContext('2d');
     if (chartCatInstance) chartCatInstance.destroy();
 
@@ -346,7 +368,7 @@
       options: { responsive: true, plugins: { legend: { display: false } } }
     });
 
-    // 2. Gráfico Donut Balance (Ingresos vs Egresos del Mes Seleccionado)
+    // 2. Gráfico Donut Balance Mensual
     const totalIng = listadoMovimientos.filter(m => m.tipo === 'ingreso' && m.mesAnio === mesSeleccionado).reduce((acc, curr) => acc + curr.monto, 0);
     const totalEgr = listadoMovimientos.filter(m => m.tipo === 'egreso' && m.mesAnio === mesSeleccionado).reduce((acc, curr) => acc + curr.monto, 0);
 
@@ -363,6 +385,82 @@
         }]
       },
       options: { responsive: true }
+    });
+  }
+
+  // NUEVA FUNCIÓN: RENDERIZAR GRÁFICO DE BARRAS APILADAS POR AÑO (MES A MES)
+  function renderizarGraficoAcumuladoAnual() {
+    const anioSeleccionado = document.getElementById('selectorAnio').value;
+
+    // Obtener todas las categorías únicas que se hayan usado en egresos
+    const listaCategorias = [
+      "Credito hipotecario", "Arriendo Stgo", "Arriendo Afta", "Arriendo Caren",
+      "internet Afta", "internet Carén", "pasajes bus", "bencina",
+      "alimentacion cata", "alimentacion max", "alimentacion ica", "celular",
+      "contribuciones", "universidad Cata", "traslados cata"
+    ];
+
+    // Filtrar los egresos que pertenecen al año seleccionado
+    const egresosAnio = listadoMovimientos.filter(m => m.tipo === 'egreso' && m.fecha.startsWith(anioSeleccionado));
+
+    // Construir los 12 datasets (uno por cada mes)
+    const datasets = [];
+
+    for (let mesIdx = 0; mesIdx < 12; mesIdx++) {
+      const numMesStr = String(mesIdx + 1).padStart(2, '0');
+      const mesClave = `${anioSeleccionado}-${numMesStr}`;
+
+      // Monto acumulado por cada categoría en este mes
+      const datosMes = listaCategorias.map(cat => {
+        return egresosAnio
+          .filter(e => e.categoria === cat && e.mesAnio === mesClave)
+          .reduce((sum, e) => sum + e.monto, 0);
+      });
+
+      datasets.push({
+        label: NOMBRES_MESES[mesIdx],
+        data: datosMes,
+        backgroundColor: COLORES_MESES[mesIdx]
+      });
+    }
+
+    const ctxAnual = document.getElementById('chartAcumuladoAnual').getContext('2d');
+    if (chartAnualInstance) chartAnualInstance.destroy();
+
+    chartAnualInstance = new Chart(ctxAnual, {
+      type: 'bar',
+      data: {
+        labels: listaCategorias,
+        datasets: datasets
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                let label = context.dataset.label || '';
+                if (label) label += ': ';
+                if (context.parsed.y !== null) {
+                  label += '$' + context.parsed.y.toLocaleString('es-CL');
+                }
+                return label;
+              }
+            }
+          }
+        },
+        scales: {
+          x: { stacked: true },
+          y: {
+            stacked: true,
+            ticks: {
+              callback: function(value) {
+                return '$' + value.toLocaleString('es-CL');
+              }
+            }
+          }
+        }
+      }
     });
   }
 </script>
